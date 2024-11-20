@@ -17,11 +17,11 @@ def parse_arguments():
     parser = argparse.ArgumentParser(description='Large Language Model Multiple Choice QA with Majority Voting')
 
     # Data arguments
-    parser.add_argument('--input_file', type=str, required=True, help='Path to input JSONL file (train/valid/test)')
-    parser.add_argument('--output_file', type=str, required=True, help='Path to output predictions JSONL file')
+    parser.add_argument('--input_file', type=str, default='./data/train.jsonl', help='Path to input JSONL file (train/valid/test)')
+    parser.add_argument('--output_file', type=str, default='./data/predictions.jsonl', help='Path to output predictions JSONL file')
 
     # Model arguments
-    parser.add_argument('--model_path', type=str, required=True, help='Path to the model or model name in HuggingFace hub')
+    parser.add_argument('--model_path', type=str, default='./models/llama-3.2-1B-instruct', help='Path to the model or model name in HuggingFace hub')
     parser.add_argument('--device', type=str, default=None, help='Device to use (cuda/cpu). If None, automatically detected')
 
     # Voting arguments
@@ -180,8 +180,8 @@ def majority_vote(all_predictions, min_probability_threshold):
     total_votes = len(filtered_predictions)
 
     # Get the majority prediction and its confidence
-    majority_pred = vote_counts.most_common(1)["Write Your Code Here"]["Write Your Code Here"]
-    confidence = vote_counts[majority_pred] / total_votes
+    majority_pred, majority_count = vote_counts.most_common(1)[0]
+    confidence = majority_count / total_votes
 
     # Select the rationale from the most confident prediction
     best_rationale = rationales[filtered_predictions.index(majority_pred)]
