@@ -32,6 +32,16 @@ def parse_arguments():
     parser.add_argument('--max_length', type=int, default=512, help='Maximum sequence length')
     parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
 
+    # Temperature arguments
+    parser.add_argument('--temperature', type=float, default=0.6,
+                       help='Temperature for text generation (0.0-1.0+)')
+    parser.add_argument('--min_temperature', type=float, default=0.3,
+                       help='Minimum temperature for dynamic temperature scaling')
+    parser.add_argument('--max_temperature', type=float, default=0.9,
+                       help='Maximum temperature for dynamic temperature scaling')
+    parser.add_argument('--use_dynamic_temperature', action='store_true',
+                       help='Whether to use dynamic temperature scaling')
+
     args = parser.parse_args()
 
     # Auto-detect device if not specified
@@ -103,7 +113,7 @@ def create_prompt(question, choices, tokenizer):
     return prompt, choices['label']
 
 
-def get_next_token_probabilities(model, tokenizer, prompt, options, device, max_new_tokens=64):
+def get_next_token_probabilities(model, tokenizer, prompt, options, device, args):
     """
     Generate rationale and get probabilities for the final answer.
     """
@@ -113,14 +123,21 @@ def get_next_token_probabilities(model, tokenizer, prompt, options, device, max_
 
     # Generate until we get to "Answer: "
     with torch.no_grad():
+        # 基础生成设置
+        generation_config = {
+            "max_new_tokens": args.max_length,
+            "pad_token_id": tokenizer.eos_token_id,
+            "temperature": args.temperature,  # 使用命令行参数中的温度值
+            "do_sample": True if args.temperature > 0 else False,
+            "num_return_sequences": 1,
+            "eos_token_id": tokenizer.eos_token_id,
+            "top_p": 0.9,  # 可选：添加 top_p 采样
+            "top_k": 50,   # 可选：添加 top_k 采样
+        }
+
         outputs = model.generate(
             **inputs,
-            max_new_tokens=max_new_tokens,
-            pad_token_id=tokenizer.eos_token_id,
-            temperature=0.6,
-            do_sample=True,
-            num_return_sequences=1,
-            eos_token_id=tokenizer.eos_token_id,
+            **generation_config
         )
 
         # Decode the generated text
@@ -201,6 +218,24 @@ def save_results(results, output_file):
             f.write(json.dumps(result) + '\n')
 
 
+def get_dynamic_temperature(confidence_history, args):
+    """
+    根据历史预测的置信度动态调整温度
+    """
+    if not confidence_history:
+        return args.temperature
+    
+    avg_confidence = sum(confidence_history) / len(confidence_history)
+    
+    # 如果置信度太高，增加温度使输出更多样化
+    if avg_confidence > 0.9:
+        return min(args.temperature * 1.2, args.max_temperature)
+    # 如果置信度太低，降低温度使输出更确定性
+    elif avg_confidence < 0.5:
+        return max(args.temperature * 0.8, args.min_temperature)
+    
+    return args.temperature
+
 def main():
     # Parse arguments and set seed
     args = parse_arguments()
@@ -236,8 +271,13 @@ def main():
     results = []
     correct_predictions = 0
     total_questions = len(data)
+    confidence_history = []
 
     for item in tqdm(data, desc="Processing questions"):
+        if args.use_dynamic_temperature:
+            current_temperature = get_dynamic_temperature(confidence_history, args)
+            args.temperature = current_temperature
+        
         prompt, options = create_prompt(item['question'], item['choices'], tokenizer)
 
         try:
@@ -245,7 +285,7 @@ def main():
             all_predictions = []
             for _ in range(args.num_forward_passes):
                 probs, rationale = get_next_token_probabilities(
-                    model, tokenizer, prompt, options, args.device)
+                    model, tokenizer, prompt, options, args.device, args)
                 all_predictions.append((probs, rationale))
 
             # Perform majority voting
@@ -279,6 +319,7 @@ def main():
                 correct_predictions += 1
 
         results.append(result)
+        confidence_history.append(confidence)
 
         # Print intermediate results for long runs
         if (len(results) % 100) == 0:
