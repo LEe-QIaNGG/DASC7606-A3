@@ -22,7 +22,7 @@ def parse_arguments():
 
     # Model arguments
     parser.add_argument('--model_path', type=str, default='./models/llama-3.2-1B-instruct', help='Path to the model or model name in HuggingFace hub')
-    parser.add_argument('--device', type=str, default=None, help='Device to use (cuda/cpu). If None, automatically detected')
+    parser.add_argument('--device', type=str, default='cuda', help='Device to use (cuda/cpu). If None, automatically detected')
 
     # Voting arguments
     parser.add_argument('--num_forward_passes', type=int, default=5, help='Number of forward passes for majority voting')
