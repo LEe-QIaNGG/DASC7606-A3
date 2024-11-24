@@ -1,14 +1,15 @@
-python mcqa.py --input_file "data/test.jsonl" --output_file "predictions/test_dynamic.jsonl" --model_path "models/Llama-3.2-1B-Instruct" --num_forward_passes 8 --use_dynamic_temperature --min_temperature 0.3 --max_temperature 0.9
+python mcqa.py --input_file "data/test.jsonl" --output_file "predictions/test_dynamic.jsonl" --model_path "model/Llama-3.2-1B-Instruct" --num_forward_passes 8 --use_dynamic_temperature --min_temperature 0.3 --max_temperature 0.9
 gpu-interactive
 conda activate nlp_env
-
+huggingface-cli download --resume-download unsloth/Llama-3.2-1B-Instruct --local-dir model/Llama-3.2-1B-Instruct
+tmux attach-session -t 27
 test
 1 12 48.71
 0.6 20 49.15
 0.3 8 48.46
 0.6 8 49.32
 0.6 10 50
-
+dynamic 8 50.68
 0.9 8 47.95
 总样本数: 1172
 正确数量: 562
